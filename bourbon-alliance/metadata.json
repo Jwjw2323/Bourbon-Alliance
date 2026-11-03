@@ -1,0 +1,8 @@
+{
+  "name": "Bourbon Alliance",
+  "description": "Independent bourbon intelligence and community drop radar for Washington DC, Maryland, and Virginia. Track retailer allocations, price ceilings, and verified anonymous tips.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
+
