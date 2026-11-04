@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, ShieldCheck, User, LogOut, CheckCircle, Key, Lock, EyeOff } from 'lucide-react';
+import { X, ShieldCheck, User, LogOut, CheckCircle, Lock, EyeOff } from 'lucide-react';
 import { UserSession } from '../types';
 
 interface GoogleAuthModalProps {
@@ -15,8 +15,6 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
   userSession,
   onUpdateSession,
 }) => {
-  const [clientIdInput, setClientIdInput] = useState('');
-  const [showConfig, setShowConfig] = useState(false);
   const [customEmail, setCustomEmail] = useState('jonathanwhitman907@gmail.com');
   const [customName, setCustomName] = useState('Jonathan Whitman');
   const [isClerk, setIsClerk] = useState(false);
@@ -26,6 +24,7 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
 
   const handleSimulateGoogleLogin = () => {
     onUpdateSession({
+      ...userSession,
       isSignedIn: true,
       email: customEmail,
       name: customName,
@@ -33,14 +32,30 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
       anonymousByDefault,
       role: isClerk ? 'verified_clerk' : 'whiskey_hunter',
       reputationScore: 120,
-      savedStoreIds: ['dc-schneiders-capitol-hill', 'md-corridor-wine-spirits'],
-      savedBottleIds: ['blantons-single-barrel', 'weller-antique-107']
+      savedStoreIds: ['dc-schneiders', 'md-corridor-wine-spirits'],
+      savedBottleIds: ['blantons-single-barrel', 'weller-antique-107'],
+      watchPriorities: userSession.watchPriorities || {
+        'blantons-single-barrel': 'unicorn',
+        'weller-antique-107': 'unicorn'
+      },
+      alertPrefs: userSession.alertPrefs || {
+        regions: ['DC', 'MD', 'VA'],
+        sms: true,
+        email: true,
+        quietStart: 22,
+        quietEnd: 8,
+        cooldownHours: 4,
+        smsDailyCap: 3,
+        corroborationForSms: true,
+        freshWindowMin: 90
+      }
     });
     onClose();
   };
 
   const handleSignOut = () => {
     onUpdateSession({
+      ...userSession,
       isSignedIn: false,
       anonymousByDefault: true,
       role: 'member',
@@ -187,35 +202,6 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
                   className="rounded border-stone-700 text-amber-600 focus:ring-amber-500 h-4 w-4 bg-stone-900"
                 />
               </div>
-            </div>
-
-            {/* VPS OAuth Client ID Configuration toggle */}
-            <div className="pt-2 border-t border-stone-800">
-              <button
-                type="button"
-                onClick={() => setShowConfig(!showConfig)}
-                className="text-[11px] text-stone-400 hover:text-stone-300 flex items-center gap-1"
-              >
-                <Key className="w-3 h-3 text-amber-400" />
-                <span>{showConfig ? 'Hide' : 'Configure'} Google Client ID for bourbonalliance.net</span>
-              </button>
-
-              {showConfig && (
-                <div className="p-3 bg-stone-950 border border-stone-800 rounded-lg mt-2 text-[11px] space-y-2 text-stone-400">
-                  <p>
-                    In Google Cloud Console, create an OAuth 2.0 Web Client ID with Authorized JavaScript origins:
-                    <br />
-                    <code className="text-amber-400 font-mono-code">https://bourbonalliance.net</code>
-                  </p>
-                  <input
-                    type="text"
-                    placeholder="e.g. 727001867727-...apps.googleusercontent.com"
-                    value={clientIdInput}
-                    onChange={(e) => setClientIdInput(e.target.value)}
-                    className="w-full bg-stone-900 border border-stone-700 p-1.5 rounded font-mono-code text-[10px] text-stone-200"
-                  />
-                </div>
-              )}
             </div>
 
           </div>

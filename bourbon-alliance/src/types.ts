@@ -1,5 +1,7 @@
 export type Jurisdiction = 'DC' | 'MD' | 'VA';
 
+export type StoreKind = 'private' | 'abs' | 'abc' | 'farm_distillery';
+
 export type StoreTier = 
   | 'Allocated Partner' 
   | 'Boutique Specialist' 
@@ -7,23 +9,33 @@ export type StoreTier =
   | 'Hidden Gem' 
   | 'Mom & Pop' 
   | 'Farm Distillery / Artisan Producer'
-  | 'State ABC Store (Controlled Drop Point)';
+  | 'State ABC Store (Controlled Drop Point)'
+  | 'County ABS Store (MoCo Controlled)';
 
-export type PricingReputation = 'MSRP Loyal' | 'Slight Markup (+10-25%)' | 'Secondary / Museum' | 'Mixed / Dynamic' | 'State Mandated MSRP';
+export type PricingReputation = 
+  | 'MSRP Loyal' 
+  | 'Slight Markup (+10-25%)' 
+  | 'Secondary / Museum' 
+  | 'Mixed / Dynamic' 
+  | 'State Mandated MSRP';
 
 export interface Store {
   id: string;
   name: string;
   jurisdiction: Jurisdiction;
-  countyOrWard: string; // e.g. "DC Ward 2 (Georgetown)", "Prince George's County", "Fairfax County (VA)", "Spotsylvania (Fredericksburg)"
-  licenseType: string; // e.g. "DC ABCA Class A", "MD Class A", "VA Limited Distillery", "VA ABC State Store"
+  countyOrWard: string; // e.g. "DC Ward 2 (Georgetown)", "Montgomery County (MoCo ABS)", "Fairfax County", etc.
+  kind: StoreKind;
+  number?: string; // Store number for ABC / ABS
+  licenseType: string;
   licenseNumber: string;
-  isStateRun: boolean; // false for DC/MD independent & VA Farm Distilleries, true for VA ABC
+  isStateRun: boolean; // false for DC/MD independent & VA Farm Distilleries, true for VA ABC & MoCo ABS
   address: string;
   city: string;
   state: 'DC' | 'MD' | 'VA';
   zip: string;
-  phone: string;
+  phone?: string;
+  delivery?: string; // e.g. "Tue", "Thu"
+  hours: string;
   rating: number;
   tier: StoreTier;
   pricingReputation: PricingReputation;
@@ -35,7 +47,13 @@ export interface Store {
   lng: number;
 }
 
-export type TipsterRole = 'anonymous_clerk' | 'anonymous_driver' | 'anonymous_hunter' | 'verified_member';
+export type TipsterRole = 
+  | 'anonymous_clerk' 
+  | 'anonymous_driver' 
+  | 'anonymous_hunter' 
+  | 'verified_member'
+  | 'va_abc'
+  | 'moco';
 
 export type BottleLocation = 
   | 'Behind Counter (Ask)' 
@@ -47,12 +65,13 @@ export type BottleLocation =
 
 export interface DropTip {
   id: string;
-  tipCode: string; // e.g. "BA-7391X" for anonymous tracking
+  tipCode: string; // e.g. "BA-7391X"
   storeId: string;
   storeName: string;
   jurisdiction: Jurisdiction;
   countyOrWard: string;
   address: string;
+  bottleId?: string;
   bottleName: string;
   distillery: string;
   bottleProof?: string;
@@ -64,15 +83,25 @@ export interface DropTip {
   bottleLocation: BottleLocation;
   quantityEstimate: string;
   notes: string;
-  createdAt: string; // ISO date
+  createdAt: string;
   minutesAgo: number;
   upvotes: number;
   downvotes: number;
   userVote?: 'up' | 'down';
   isSoldOut: boolean;
   isVerified: boolean;
-  photoUrl?: string;
 }
+
+export type DemandTier = 
+  | 'unicorn' 
+  | 'limited' 
+  | 'shelf' 
+  | 'Unicorn' 
+  | 'Highly Allocated' 
+  | 'Allocated Seasonal' 
+  | 'Huntable Standard';
+export type Priority = 'unicorn' | 'want' | 'curious';
+export type Channel = 'sms' | 'email' | 'digest' | 'board' | 'drop';
 
 export interface BottleInfo {
   id: string;
@@ -83,8 +112,32 @@ export interface BottleInfo {
   fairCeiling: number;
   secondaryAvg: number;
   category: 'Bourbon' | 'Rye' | 'Wheated' | 'Single Barrel' | 'Cask Strength';
-  demandTier: 'Unicorn' | 'Highly Allocated' | 'Allocated Seasonal' | 'Huntable Standard';
+  demandTier: DemandTier;
   description: string;
+}
+
+export interface AlertPrefs {
+  regions: Jurisdiction[];
+  sms: boolean;
+  email: boolean;
+  quietStart: number; // e.g. 22 (10pm)
+  quietEnd: number;   // e.g. 8 (8am)
+  cooldownHours: number;
+  smsDailyCap: number;
+  corroborationForSms: boolean;
+  freshWindowMin: number;
+}
+
+export interface AlertDecision {
+  channel: Channel;
+  reason: string;
+}
+
+export interface PlannedAlert {
+  tip: DropTip;
+  bottle: BottleInfo;
+  store: Store;
+  decision: AlertDecision;
 }
 
 export interface UserSession {
@@ -98,4 +151,6 @@ export interface UserSession {
   reputationScore: number;
   savedStoreIds: string[];
   savedBottleIds: string[];
+  watchPriorities: Record<string, Priority>;
+  alertPrefs: AlertPrefs;
 }

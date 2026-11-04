@@ -3,18 +3,18 @@ import { Header } from './components/Header';
 import { DropFeed } from './components/DropFeed';
 import { StoreDirectory } from './components/StoreDirectory';
 import { PriceCeilingIndex } from './components/PriceCeilingIndex';
-import { StoreDiscoveryEngine } from './components/StoreDiscoveryEngine';
-import { ArchitectureGuide } from './components/ArchitectureGuide';
+import { AlertsManager } from './components/AlertsManager';
 import { DropTipModal } from './components/DropTipModal';
 import { GoogleAuthModal } from './components/GoogleAuthModal';
 import { INITIAL_DROP_TIPS } from './data/mockTips';
-import { DC_MD_INDEPENDENT_STORES } from './data/mockStores';
+import { DC_MD_VA_STORES } from './data/mockStores';
 import { POPULAR_BOTTLES } from './data/bottles';
 import { DropTip, Store, UserSession } from './types';
-import { GitBranch, Shield, Heart } from 'lucide-react';
+import { DEFAULT_ALERT_PREFS } from './services/alertEngine';
+import { GitBranch } from 'lucide-react';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'radar' | 'stores' | 'ceilings' | 'discovery' | 'architecture'>('radar');
+  const [activeTab, setActiveTab] = useState<'radar' | 'alerts' | 'stores' | 'ceilings'>('radar');
   
   // Persisted or default tips
   const [tips, setTips] = useState<DropTip[]>(() => {
@@ -29,10 +29,10 @@ export default function App() {
     return INITIAL_DROP_TIPS;
   });
 
-  const [stores] = useState<Store[]>(DC_MD_INDEPENDENT_STORES);
+  const [stores] = useState<Store[]>(DC_MD_VA_STORES);
   const [bottles] = useState(POPULAR_BOTTLES);
 
-  // User Google Session
+  // User Google Session with Watchlist & Alert Preferences
   const [userSession, setUserSession] = useState<UserSession>(() => {
     const saved = localStorage.getItem('bourbon_alliance_user');
     if (saved) {
@@ -45,7 +45,16 @@ export default function App() {
           role: 'member',
           reputationScore: 0,
           savedStoreIds: [],
-          savedBottleIds: []
+          savedBottleIds: [],
+          watchPriorities: {
+            'blantons-single-barrel': 'unicorn',
+            'weller-antique-107': 'unicorn',
+            'stagg-batch-barrel-proof': 'unicorn',
+            'eh-taylor-small-batch': 'want',
+            'eagle-rare-10': 'want',
+            'john-j-bowman-single-barrel': 'want'
+          },
+          alertPrefs: DEFAULT_ALERT_PREFS
         };
       }
     }
@@ -55,7 +64,16 @@ export default function App() {
       role: 'member',
       reputationScore: 0,
       savedStoreIds: [],
-      savedBottleIds: []
+      savedBottleIds: [],
+      watchPriorities: {
+        'blantons-single-barrel': 'unicorn',
+        'weller-antique-107': 'unicorn',
+        'stagg-batch-barrel-proof': 'unicorn',
+        'eh-taylor-small-batch': 'want',
+        'eagle-rare-10': 'want',
+        'john-j-bowman-single-barrel': 'want'
+      },
+      alertPrefs: DEFAULT_ALERT_PREFS
     };
   });
 
@@ -82,7 +100,6 @@ export default function App() {
         const currentVote = tip.userVote;
 
         if (currentVote === direction) {
-          // undo vote
           return {
             ...tip,
             userVote: undefined,
@@ -135,7 +152,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col selection:bg-amber-600 selection:text-white">
       
-      {/* Primary Header */}
+      {/* Primary Header with Fixed Height & No Cutoff */}
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -157,11 +174,20 @@ export default function App() {
           />
         )}
 
+        {activeTab === 'alerts' && (
+          <AlertsManager
+            tips={tips}
+            stores={stores}
+            bottles={bottles}
+            userSession={userSession}
+            onUpdateSession={handleUpdateSession}
+          />
+        )}
+
         {activeTab === 'stores' && (
           <StoreDirectory
             stores={stores}
             onSelectStoreForTip={handleSelectStoreForTip}
-            onOpenDiscoveryGuide={() => setActiveTab('discovery')}
           />
         )}
 
@@ -169,17 +195,9 @@ export default function App() {
           <PriceCeilingIndex bottles={bottles} />
         )}
 
-        {activeTab === 'discovery' && (
-          <StoreDiscoveryEngine />
-        )}
-
-        {activeTab === 'architecture' && (
-          <ArchitectureGuide />
-        )}
-
       </main>
 
-      {/* Footer */}
+      {/* Clean Production Footer */}
       <footer className="bg-stone-950 border-t border-stone-800/80 py-8 text-xs text-stone-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4">
           
@@ -195,10 +213,24 @@ export default function App() {
 
           <div className="flex flex-wrap items-center justify-center gap-4 text-[11px]">
             <button
-              onClick={() => setActiveTab('discovery')}
+              onClick={() => setActiveTab('radar')}
               className="text-stone-400 hover:text-amber-400 transition-colors"
             >
-              DC, MD & VA Store Discovery
+              Drop Radar
+            </button>
+            <span className="text-stone-700">·</span>
+            <button
+              onClick={() => setActiveTab('alerts')}
+              className="text-stone-400 hover:text-amber-400 transition-colors"
+            >
+              Alerts & Watchlist
+            </button>
+            <span className="text-stone-700">·</span>
+            <button
+              onClick={() => setActiveTab('stores')}
+              className="text-stone-400 hover:text-amber-400 transition-colors"
+            >
+              Store Directory
             </button>
             <span className="text-stone-700">·</span>
             <button
@@ -208,13 +240,6 @@ export default function App() {
               Price Ceilings
             </button>
             <span className="text-stone-700">·</span>
-            <button
-              onClick={() => setActiveTab('architecture')}
-              className="text-stone-400 hover:text-amber-400 transition-colors"
-            >
-              VPS Specs & National Blueprint
-            </button>
-            <span className="text-stone-700">·</span>
             <a
               href="https://github.com/Jwjw2323/Bourbon-Alliance"
               target="_blank"
@@ -222,7 +247,7 @@ export default function App() {
               className="flex items-center gap-1 text-amber-400 hover:text-amber-300 transition-colors"
             >
               <GitBranch className="w-3.5 h-3.5" />
-              <span>GitHub Repo</span>
+              <span>GitHub</span>
             </a>
           </div>
 
@@ -230,7 +255,7 @@ export default function App() {
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4 pt-4 border-t border-stone-900 text-[10px] text-stone-600 text-center flex flex-col sm:flex-row items-center justify-between gap-2">
           <div>
-            Built for independent bottle hunters and honest retailers. 100% independent.
+            Built for independent bottle hunters, clerks, and transparent retailers. 100% independent.
           </div>
           <div>
             Not affiliated with state ABC agencies, Montgomery County ABS, or distilled spirits conglomerates.

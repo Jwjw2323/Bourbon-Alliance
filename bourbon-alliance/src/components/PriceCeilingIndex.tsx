@@ -46,7 +46,7 @@ export const PriceCeilingIndex: React.FC<PriceCeilingIndexProps> = ({ bottles })
               <span>Bourbon Alliance Market Standard</span>
             </div>
             <h1 className="font-serif-brand text-2xl sm:text-3xl font-bold text-stone-100 mt-1">
-              DC & MD Price Ceiling Index
+              DC, MD & VA Price Ceiling Index
             </h1>
             <p className="text-xs sm:text-sm text-stone-400 max-w-2xl mt-1">
               Ceilings represent the maximum acceptable retail price before a purchase is classified as secondary gouging. Stores adhering to these ceilings earn verified community status.
