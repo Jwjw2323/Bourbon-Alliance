@@ -3,8 +3,8 @@ import { DropTip, Store, BottleInfo, AlertPrefs, Priority, AlertDecision, Planne
 export const PREVIEW_HOUR = 8; // 8:00 AM scored preview
 export const DEFAULT_ALERT_PREFS: AlertPrefs = {
   regions: ['DC', 'MD', 'VA'],
-  sms: true,
-  email: true,
+  sms: false, // Verification Requirement: Must NOT be pre-selected
+  email: false,
   phoneNumber: '',
   notificationEmail: '',
   quietStart: 22, // 10 PM
