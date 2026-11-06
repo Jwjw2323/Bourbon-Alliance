@@ -105,21 +105,19 @@ export const TermsAndConditions: React.FC<TermsAndConditionsProps> = ({ onBack, 
         </section>
 
         {/* Clause 4 */}
-        <section className="space-y-3 pt-4 border-t border-stone-800">
+        <section className="space-y-2 pt-4 border-t border-stone-800">
           <h2 className="font-serif-brand text-lg sm:text-xl font-bold text-stone-100">
-            4. SMS Drop Alerts, Carrier Compliance & Opt-In Terms
+            4. SMS Drop Alerts & Carrier Compliance (Opt-Out via STOP)
           </h2>
-          <p className="text-stone-300">
-            Bourbon Alliance operates an optional SMS notification service for registered users and web subscribers. By submitting your mobile phone number on our web opt-in form, you agree to the following terms in accordance with CTIA, TCPA, and Carrier guidelines:
+          <p>
+            By opting into SMS drop notifications:
           </p>
           <ul className="list-disc list-inside space-y-1.5 pl-2 text-stone-300">
-            <li><strong>Voluntary Web Opt-In:</strong> Consent is collected solely via an explicit web opt-in form with an un-selected checkbox. Consent is never pre-checked or assumed. Consent is not a condition of purchasing any good or service.</li>
-            <li><strong>Program Description:</strong> Bourbon Alliance Drop Alerts delivers time-sensitive text alerts regarding account activity, high-demand allocated whiskey drops, store inventory arrivals, and community sightings across Washington DC, Maryland, and Virginia.</li>
-            <li><strong>Message Frequency:</strong> You will receive up to 3 messages per day (message frequency varies based on regional bottle sightings).</li>
-            <li><strong>Standard Rates:</strong> Message and data rates may apply depending on your mobile phone service plan.</li>
-            <li><strong>Opt-Out Instructions (STOP):</strong> You may cancel the SMS service at any time. Text <span className="text-amber-400 font-mono-code font-bold">STOP</span> in reply to any notification message. You will receive a single confirmation message confirming your opt-out. No further messages will be sent unless re-subscribed.</li>
+            <li><strong>Program Description:</strong> Bourbon Alliance Drop Alerts delivers time-sensitive notification messages when high-demand "Unicorn" allocated whiskeys are spotted at licensed retail stores in DC, MD, and VA.</li>
+            <li><strong>Opt-Out Language (STOP):</strong> You may cancel the SMS service at any time. Simply text <span className="text-amber-400 font-mono-code font-bold">STOP</span> in reply to any notification message. After sending STOP, we will send you an SMS confirmation that you have been unsubscribed. No further messages will be sent to your mobile phone unless re-enabled in your account settings.</li>
             <li><strong>Customer Support (HELP):</strong> For assistance or instructions, reply <span className="text-amber-400 font-mono-code font-bold">HELP</span> to any text message, or contact our support team at <a href="mailto:celeron.sec@proton.me" className="text-amber-400 underline font-mono-code">celeron.sec@proton.me</a>.</li>
-            <li><strong>Carrier Disclaimer:</strong> Wireless mobile carriers are not liable for delayed, unread, or undelivered messages.</li>
+            <li><strong>Message Frequency & Rates:</strong> Message frequency varies based on watched bottle sightings and your personal daily cap setting (maximum 1 to 10 messages/day). Standard message and data rates may apply from your mobile service carrier.</li>
+            <li><strong>Carrier Disclaimer:</strong> Wireless carriers are not liable for delayed, unread, or undelivered messages.</li>
           </ul>
         </section>
 

@@ -6,6 +6,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # Read from the .env file next to this docker-compose.yml
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
     container_name: bourbon_alliance_web
     restart: unless-stopped
     ports:

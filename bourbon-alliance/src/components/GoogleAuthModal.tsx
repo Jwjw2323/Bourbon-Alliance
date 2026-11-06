@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, ShieldCheck, User, LogOut, CheckCircle, Lock, EyeOff, Key, Phone, Mail } from 'lucide-react';
+import { X, ShieldCheck, User, LogOut, CheckCircle, Lock, EyeOff, Phone, Mail } from 'lucide-react';
 import { UserSession } from '../types';
 
 interface GoogleAuthModalProps {
@@ -21,6 +21,9 @@ interface GoogleJwtPayload {
   family_name?: string;
 }
 
+// Client ID is read from the build environment only. It is never rendered in the UI.
+const GOOGLE_CLIENT_ID: string = ((import.meta as any).env?.VITE_GOOGLE_CLIENT_ID || '').trim();
+
 export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
   isOpen,
   onClose,
@@ -29,46 +32,45 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
   onOpenPrivacy,
   onOpenTerms,
 }) => {
-  // Inputs are ALWAYS blank by default when unauthenticated
-  const [emailInput, setEmailInput] = useState('');
-  const [nameInput, setNameInput] = useState('');
-  const [phoneInput, setPhoneInput] = useState('');
-  const [googleClientId, setGoogleClientId] = useState(() => {
-    return localStorage.getItem('bourbon_google_client_id') || 
-           (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID || 
-           '19323179551-81fncrrnrv1gv690a98agpu8to55mtej.apps.googleusercontent.com';
-  });
-  const [isClerk, setIsClerk] = useState(false);
-  const [anonymousByDefault, setAnonymousByDefault] = useState(true);
-  const [smsConsent, setSmsConsent] = useState(false);
+  const [emailInput, setEmailInput] = useState(userSession.email || '');
+  const [nameInput, setNameInput] = useState(userSession.name || '');
+  const [phoneInput, setPhoneInput] = useState(userSession.phoneNumber || '');
+  const [isClerk, setIsClerk] = useState(userSession.role === 'verified_clerk');
+  const [anonymousByDefault, setAnonymousByDefault] = useState(userSession.anonymousByDefault ?? true);
+  const [smsConsent, setSmsConsent] = useState(userSession.alertPrefs?.sms ?? false);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // Sync inputs ONLY when signed in; when signed out or opening modal, force blank inputs
+  // Sync inputs when session changes
   useEffect(() => {
     if (userSession.isSignedIn) {
-      setEmailInput(userSession.email && !userSession.email.includes('whitman') ? userSession.email : '');
-      setNameInput(userSession.name && !userSession.name.includes('Whitman') ? userSession.name : '');
+      setEmailInput(userSession.email || '');
+      setNameInput(userSession.name || '');
       setPhoneInput(userSession.phoneNumber || '');
       setIsClerk(userSession.role === 'verified_clerk');
-      setAnonymousByDefault(userSession.anonymousByDefault ?? true);
-    } else {
-      setEmailInput('');
-      setNameInput('');
-      setPhoneInput('');
-      setIsClerk(false);
+      setAnonymousByDefault(userSession.anonymousByDefault);
     }
-  }, [userSession.isSignedIn, isOpen]);
+  }, [userSession]);
 
-  // Handle plain email change without auto-filling any name
+  // When email changes in unsigned state, generate a smart readable name suggestion if name is blank or default
   const handleEmailChange = (val: string) => {
     setEmailInput(val);
+    if (!nameInput || nameInput === 'Whiskey Hunter') {
+      const prefix = val.split('@')[0] || '';
+      const formatted = prefix
+        .replace(/[._-]/g, ' ')
+        .replace(/\b\w/g, c => c.toUpperCase())
+        .trim();
+      if (formatted.length > 1) {
+        setNameInput(formatted);
+      }
+    }
   };
 
   // Google Identity Services (GIS) integration
   useEffect(() => {
     if (!isOpen || userSession.isSignedIn) return;
 
-    const clientId = googleClientId.trim();
+    const clientId = GOOGLE_CLIENT_ID;
     if (clientId && typeof window !== 'undefined' && (window as any).google?.accounts?.id) {
       try {
         (window as any).google.accounts.id.initialize({
@@ -129,7 +131,7 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
         // Fallback gracefully
       }
     }
-  }, [isOpen, googleClientId, userSession.isSignedIn, isClerk, anonymousByDefault, phoneInput]);
+  }, [isOpen, userSession.isSignedIn, isClerk, anonymousByDefault, phoneInput]);
 
   if (!isOpen) return null;
 
@@ -168,10 +170,6 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
   };
 
   const handleSignOut = () => {
-    try {
-      localStorage.removeItem('bourbon_alliance_user');
-      localStorage.removeItem('bourbon_notification_logs');
-    } catch (e) {}
     onUpdateSession({
       ...userSession,
       isSignedIn: false,
@@ -185,11 +183,6 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
     setEmailInput('');
     setNameInput('');
     setPhoneInput('');
-  };
-
-  const handleSaveClientId = (val: string) => {
-    setGoogleClientId(val);
-    localStorage.setItem('bourbon_google_client_id', val.trim());
   };
 
   return (
@@ -307,11 +300,11 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
               </div>
             )}
 
-            {/* Official Google Identity Services Container & One-Click Login */}
+            {/* Official Google Identity Services Container */}
             <div className="space-y-3">
               <div id="google-signin-btn-container" className="flex justify-center min-h-[44px]"></div>
 
-              {/* Primary Sign in with Google Button */}
+              {/* Direct Continue with Google Account Button */}
               <button
                 type="button"
                 onClick={handleManualSignIn}
@@ -334,154 +327,104 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
               </div>
             </div>
 
-            {/* Optional Alternative: Manual Alert Profile Setup */}
-            <details className="pt-2 border-t border-stone-800 text-xs group">
-              <summary className="cursor-pointer text-stone-400 hover:text-amber-400 font-medium py-1.5 flex items-center justify-between transition-colors select-none">
-                <span>Or configure alerts manually without Google</span>
-                <span className="text-stone-500 group-open:rotate-180 transition-transform">▾</span>
-              </summary>
+            {/* Custom Account & Notification Credentials */}
+            <form onSubmit={handleManualSignIn} className="space-y-3 pt-3 border-t border-stone-800 text-xs">
+              <div className="font-semibold text-stone-300 text-[11px] uppercase tracking-wider">
+                Account & SMS Alert Profile
+              </div>
 
-              <form onSubmit={handleManualSignIn} className="space-y-3 pt-3 text-xs">
-                <div>
-                  <label className="text-[11px] text-stone-400 block mb-1">Notification Email Address</label>
-                  <div className="relative">
-                    <Mail className="w-3.5 h-3.5 text-stone-500 absolute left-2.5 top-2.5" />
-                    <input
-                      type="email"
-                      required
-                      placeholder="hunter@example.com"
-                      value={emailInput}
-                      onChange={(e) => handleEmailChange(e.target.value)}
-                      className="w-full bg-stone-950 border border-stone-700 pl-8 pr-3 py-1.5 rounded text-xs text-stone-200 font-mono-code focus:outline-none focus:border-amber-500 placeholder-stone-600"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[11px] text-stone-400 block mb-1">Display Alias / Handle</label>
-                  <div className="relative">
-                    <User className="w-3.5 h-3.5 text-stone-500 absolute left-2.5 top-2.5" />
-                    <input
-                      type="text"
-                      required
-                      placeholder="Choose an alias (e.g. DC Whiskey Scout)"
-                      value={nameInput}
-                      onChange={(e) => setNameInput(e.target.value)}
-                      className="w-full bg-stone-950 border border-stone-700 pl-8 pr-3 py-1.5 rounded text-xs text-stone-200 focus:outline-none focus:border-amber-500 placeholder-stone-600"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[11px] text-stone-400 block mb-1">Mobile Phone for SMS Drop Alerts (Optional)</label>
-                  <div className="relative">
-                    <Phone className="w-3.5 h-3.5 text-stone-500 absolute left-2.5 top-2.5" />
-                    <input
-                      type="tel"
-                      placeholder="+1 (202) 555-0199"
-                      value={phoneInput}
-                      onChange={(e) => setPhoneInput(e.target.value)}
-                      className="w-full bg-stone-950 border border-stone-700 pl-8 pr-3 py-1.5 rounded text-xs text-stone-200 font-mono-code focus:outline-none focus:border-amber-500 placeholder-stone-600"
-                    />
-                  </div>
-
-                  {phoneInput.trim().length > 0 && (
-                    <div className="mt-2 p-3 bg-stone-950 border border-stone-800 rounded-xl space-y-2 text-[11px]">
-                      <label className="flex items-start gap-2.5 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={smsConsent}
-                          onChange={(e) => setSmsConsent(e.target.checked)}
-                          className="mt-0.5 rounded border-stone-600 text-amber-600 focus:ring-amber-500 h-3.5 w-3.5 bg-stone-900 flex-shrink-0 cursor-pointer accent-amber-600"
-                        />
-                        <span className="text-stone-200 font-medium leading-relaxed">
-                          Yes, I would like to receive automated text messages from Bourbon Alliance about account payment activity, allocated whiskey drops, restock alerts, and important updates. I understand I will receive up to 3 messages per day.
-                        </span>
-                      </label>
-
-                      <div className="text-[10px] text-stone-400 pl-6 space-y-1 pt-1.5 border-t border-stone-800/80 leading-normal">
-                        <p><strong className="text-stone-300">Message Frequency:</strong> You will receive up to 3 messages per day (message frequency varies based on regional sightings).</p>
-                        <p><strong className="text-stone-300">Standard Rates:</strong> Message and data rates may apply depending on your mobile phone service plan.</p>
-                        <p><strong className="text-stone-300">Help & Stop:</strong> Reply HELP for help or STOP to cancel any time.</p>
-                        <p>Consent is not required to make a purchase or browse the website.</p>
-                        <div className="pt-1 text-amber-400">
-                          <button
-                            type="button"
-                            onClick={() => { onClose(); onOpenTerms?.(); }}
-                            className="underline hover:text-amber-300"
-                          >
-                            Terms of Service
-                          </button>
-                          {' '}|{' '}
-                          <button
-                            type="button"
-                            onClick={() => { onClose(); onOpenPrivacy?.(); }}
-                            className="underline hover:text-amber-300"
-                          >
-                            Privacy Policy
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between pt-1">
-                  <label className="text-[11px] text-stone-300 cursor-pointer flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={isClerk}
-                      onChange={(e) => setIsClerk(e.target.checked)}
-                      className="rounded border-stone-700 text-amber-600 focus:ring-amber-500 h-4 w-4 bg-stone-900"
-                    />
-                    <span>I work at a liquor store / distributor</span>
-                  </label>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <label className="text-[11px] text-stone-300 cursor-pointer flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={anonymousByDefault}
-                      onChange={(e) => setAnonymousByDefault(e.target.checked)}
-                      className="rounded border-stone-700 text-amber-600 focus:ring-amber-500 h-4 w-4 bg-stone-900"
-                    />
-                    <span>Always post drop tips anonymously</span>
-                  </label>
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full bg-amber-600 hover:bg-amber-500 text-stone-950 font-bold py-2.5 px-4 rounded-xl transition-all shadow-md mt-2 text-xs uppercase tracking-wider"
-                >
-                  Save & Continue
-                </button>
-              </form>
-            </details>
-
-            {/* Advanced: Optional Google Client ID for Production OAuth */}
-            <div className="pt-2 border-t border-stone-800/80">
-              <details className="text-[11px] text-stone-500">
-                <summary className="cursor-pointer hover:text-stone-300 flex items-center gap-1.5 py-1">
-                  <Key className="w-3 h-3 text-amber-500/80" />
-                  <span>Google OAuth Client ID (Production Config)</span>
-                </summary>
-                <div className="mt-2 space-y-1.5 pl-2">
-                  <p className="text-[10px] text-stone-400">
-                    Production Google Cloud OAuth Client ID:
-                  </p>
+              <div>
+                <label className="text-[11px] text-stone-400 block mb-1">Your Google / Notification Email</label>
+                <div className="relative">
+                  <Mail className="w-3.5 h-3.5 text-stone-500 absolute left-2.5 top-2.5" />
                   <input
-                    type="text"
-                    placeholder="e.g. 123456789-abc.apps.googleusercontent.com"
-                    value={googleClientId}
-                    onChange={(e) => handleSaveClientId(e.target.value)}
-                    className="w-full bg-stone-950 border border-stone-800 px-2 py-1 rounded text-[11px] text-stone-300 font-mono-code focus:outline-none focus:border-amber-500"
+                    type="email"
+                    required
+                    placeholder="you@gmail.com"
+                    value={emailInput}
+                    onChange={(e) => handleEmailChange(e.target.value)}
+                    className="w-full bg-stone-950 border border-stone-700 pl-8 pr-3 py-1.5 rounded text-xs text-stone-200 font-mono-code focus:outline-none focus:border-amber-500"
                   />
                 </div>
-              </details>
-            </div>
+              </div>
 
-            <div className="text-[10px] text-center text-stone-500 pt-1">
+              <div>
+                <label className="text-[11px] text-stone-400 block mb-1">Display Name / Alias</label>
+                <div className="relative">
+                  <User className="w-3.5 h-3.5 text-stone-500 absolute left-2.5 top-2.5" />
+                  <input
+                    type="text"
+                    required
+                    placeholder="Your Name (e.g. Alex Hunter)"
+                    value={nameInput}
+                    onChange={(e) => setNameInput(e.target.value)}
+                    className="w-full bg-stone-950 border border-stone-700 pl-8 pr-3 py-1.5 rounded text-xs text-stone-200 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] text-stone-400 block mb-1">Mobile Phone for SMS Drop Alerts (Optional)</label>
+                <div className="relative">
+                  <Phone className="w-3.5 h-3.5 text-stone-500 absolute left-2.5 top-2.5" />
+                  <input
+                    type="tel"
+                    placeholder="+1 (202) 555-0199"
+                    value={phoneInput}
+                    onChange={(e) => setPhoneInput(e.target.value)}
+                    className="w-full bg-stone-950 border border-stone-700 pl-8 pr-3 py-1.5 rounded text-xs text-stone-200 font-mono-code focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                {phoneInput.trim().length > 0 && (
+                  <div className="mt-2 p-2.5 bg-stone-950 border border-stone-800 rounded-lg space-y-1 text-[11px]">
+                    <label className="flex items-start gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={smsConsent}
+                        onChange={(e) => setSmsConsent(e.target.checked)}
+                        className="mt-0.5 rounded border-stone-600 text-amber-600 focus:ring-amber-500 h-3.5 w-3.5 bg-stone-900 flex-shrink-0 cursor-pointer accent-amber-600"
+                      />
+                      <span className="text-stone-200 font-medium text-[11px] leading-tight">
+                        I agree to receive automated SMS alerts for watched drops from Bourbon Alliance. Msg frequency varies. Msg & data rates may apply. Reply STOP to cancel, HELP for help.
+                      </span>
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <label className="text-[11px] text-stone-300 cursor-pointer flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={isClerk}
+                    onChange={(e) => setIsClerk(e.target.checked)}
+                    className="rounded border-stone-700 text-amber-600 focus:ring-amber-500 h-4 w-4 bg-stone-900"
+                  />
+                  <span>I work at a liquor store / distributor</span>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] text-stone-300 cursor-pointer flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={anonymousByDefault}
+                    onChange={(e) => setAnonymousByDefault(e.target.checked)}
+                    className="rounded border-stone-700 text-amber-600 focus:ring-amber-500 h-4 w-4 bg-stone-900"
+                  />
+                  <span>Always post drop tips anonymously</span>
+                </label>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-amber-600 hover:bg-amber-500 text-stone-950 font-bold py-2 rounded-lg text-xs transition-colors mt-2"
+              >
+                Save & Sign In
+              </button>
+
+              <div className="text-[10px] text-center text-stone-500 pt-1">
                 By authenticating, you agree to the{' '}
                 <button
                   type="button"
@@ -505,7 +448,9 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
                   Privacy Policy
                 </button>.
               </div>
-            </div>
+            </form>
+
+          </div>
         )}
 
       </div>

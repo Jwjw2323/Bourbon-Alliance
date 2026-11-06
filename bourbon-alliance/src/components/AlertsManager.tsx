@@ -49,34 +49,20 @@ export const AlertsManager: React.FC<AlertsManagerProps> = ({
   const [selectedBottleToAdd, setSelectedBottleToAdd] = useState<string>('');
   const [activeSubTab, setActiveSubTab] = useState<'feed' | 'watchlist' | 'channels' | 'logs'>('channels');
 
-  // Phone and Email local form inputs - empty by default unless user is actively signed in
-  const [phoneInput, setPhoneInput] = useState(() => {
-    if (userSession.isSignedIn && userSession.phoneNumber) return userSession.phoneNumber;
-    return '';
-  });
-  const [emailInput, setEmailInput] = useState(() => {
-    if (userSession.isSignedIn && userSession.notificationEmail && !userSession.notificationEmail.includes('whitman')) {
-      return userSession.notificationEmail;
-    }
-    if (userSession.isSignedIn && userSession.email && !userSession.email.includes('whitman')) {
-      return userSession.email;
-    }
-    return '';
-  });
+  // Phone and Email local form inputs
+  const [phoneInput, setPhoneInput] = useState(userSession.phoneNumber || userSession.alertPrefs?.phoneNumber || '');
+  const [emailInput, setEmailInput] = useState(userSession.notificationEmail || (userSession.isSignedIn ? userSession.email : '') || userSession.alertPrefs?.notificationEmail || '');
   const [webhookInput, setWebhookInput] = useState(userSession.alertPrefs?.webhookUrl || '');
   
   // Test notification status banner
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
 
-  // Notification logs state (clean of any stale test logs)
+  // Notification logs state
   const [notificationLogs, setNotificationLogs] = useState<NotificationLog[]>(() => {
     const saved = localStorage.getItem('bourbon_notification_logs');
     if (saved) {
       try {
-        const parsed: NotificationLog[] = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed.filter(log => !log.recipient?.includes('whitman') && !log.message?.includes('whitman'));
-        }
+        return JSON.parse(saved);
       } catch (e) {
         return [];
       }
@@ -90,19 +76,13 @@ export const AlertsManager: React.FC<AlertsManagerProps> = ({
 
   // Keep phone/email inputs synced if userSession updates externally
   useEffect(() => {
-    if (userSession.isSignedIn) {
-      if (userSession.phoneNumber) setPhoneInput(userSession.phoneNumber);
-      if (userSession.notificationEmail && !userSession.notificationEmail.includes('whitman')) {
-        setEmailInput(userSession.notificationEmail);
-      } else if (userSession.email && !userSession.email.includes('whitman')) {
-        setEmailInput(userSession.email);
-      }
-    } else {
-      // When not signed in, always keep fields blank
-      setEmailInput('');
-      setPhoneInput('');
+    if (userSession.phoneNumber && !phoneInput) {
+      setPhoneInput(userSession.phoneNumber);
     }
-  }, [userSession.isSignedIn, userSession.email, userSession.notificationEmail, userSession.phoneNumber]);
+    if ((userSession.notificationEmail || (userSession.isSignedIn && userSession.email)) && !emailInput) {
+      setEmailInput(userSession.notificationEmail || userSession.email || '');
+    }
+  }, [userSession]);
 
   // Watch priorities from userSession
   const watch = userSession.watchPriorities || {
@@ -185,45 +165,6 @@ export const AlertsManager: React.FC<AlertsManagerProps> = ({
     });
 
     setTimeout(() => setStatusMessage(null), 5000);
-  };
-
-  // Dedicated SMS Opt-In Submit Handler complying with Toll-Free / A2P 10DLC Vetting
-  const handleSubscribeSms = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const cleanPhone = phoneInput.trim();
-    if (!cleanPhone || cleanPhone.length < 10) {
-      setStatusMessage({
-        type: 'error',
-        text: 'Please enter a valid mobile phone number above.'
-      });
-      return;
-    }
-    if (!prefs.sms) {
-      setStatusMessage({
-        type: 'error',
-        text: 'Please check the consent checkbox above to agree to receive automated SMS alerts.'
-      });
-      return;
-    }
-
-    const updatedPrefs: AlertPrefs = {
-      ...prefs,
-      sms: true,
-      phoneNumber: cleanPhone
-    };
-
-    onUpdateSession({
-      ...userSession,
-      phoneNumber: cleanPhone,
-      alertPrefs: updatedPrefs
-    });
-
-    setStatusMessage({
-      type: 'success',
-      text: `✓ Yes, you're signed up! You will receive automated SMS drop alerts for watched whiskey sightings at ${cleanPhone}. Reply STOP to cancel at any time, HELP for support.`
-    });
-
-    setTimeout(() => setStatusMessage(null), 8000);
   };
 
   // Send Test SMS
@@ -478,30 +419,27 @@ export const AlertsManager: React.FC<AlertsManagerProps> = ({
                   </span>
                 </div>
 
-                {/* 1. Phone number input field */}
                 <div>
-                  <label className="text-xs text-stone-300 block mb-1 font-semibold">
-                    Mobile Phone Number
+                  <label className="text-[11px] text-stone-400 block mb-1 font-medium">
+                    Your Mobile Phone Number (for SMS)
                   </label>
                   <div className="relative">
                     <input
                       type="tel"
-                      id="sms-phone-number-input"
                       placeholder="+1 (202) 555-0199"
                       value={phoneInput}
                       onChange={(e) => setPhoneInput(e.target.value)}
-                      className="w-full bg-stone-900 border border-stone-700/80 rounded-lg px-3.5 py-2.5 text-xs sm:text-sm text-stone-100 font-mono-code focus:outline-none focus:border-amber-500 placeholder-stone-600"
+                      className="w-full bg-stone-900 border border-stone-700/80 rounded-lg px-3 py-2 text-xs text-stone-100 font-mono-code focus:outline-none focus:border-amber-500 placeholder-stone-600"
                     />
                   </div>
                   <p className="text-[10px] text-stone-500 mt-1">
-                    Enter your 10-digit mobile phone number to receive real-time SMS notifications.
+                    Used exclusively for urgent Unicorn status bottle sightings (e.g. Stagg, Weller, Blanton's).
                   </p>
                 </div>
 
-                {/* 2-7. Consent Checkbox & Full Carrier / Toll-Free Compliance Disclosures */}
-                <div className="p-4 bg-stone-900 border border-stone-800 rounded-xl space-y-3">
-                  {/* 2. Checkbox for consent (must NOT be pre-selected) & 3. Clear description of messages */}
-                  <label className="flex items-start gap-3 cursor-pointer select-none">
+                {/* VISIBLE OPT-IN CHECKBOX (Carrier / Twilio A2P 10DLC Vetting Compliant) */}
+                <div className="p-3.5 bg-stone-900 border border-stone-800 rounded-xl space-y-2">
+                  <label className="flex items-start gap-2.5 cursor-pointer select-none">
                     <input
                       type="checkbox"
                       id="sms-optin-visible-checkbox"
@@ -509,69 +447,46 @@ export const AlertsManager: React.FC<AlertsManagerProps> = ({
                       onChange={(e) => handleUpdatePrefs({ ...prefs, sms: e.target.checked })}
                       className="mt-0.5 rounded border-stone-600 text-amber-600 focus:ring-amber-500 h-4 w-4 bg-stone-950 flex-shrink-0 cursor-pointer accent-amber-600"
                     />
-                    <span className="text-xs text-stone-100 font-medium leading-relaxed">
-                      Yes, I would like to receive automated text messages from Bourbon Alliance about account payment activity, allocated whiskey drops, restock alerts, and important updates. I understand I will receive up to 3 messages per day.
+                    <span className="text-xs text-stone-100 font-semibold leading-snug">
+                      I agree to receive automated SMS text alerts from Bourbon Alliance at the mobile number provided above.
                     </span>
                   </label>
 
-                  <div className="text-[11px] text-stone-300 pl-7 space-y-2 leading-relaxed border-t border-stone-800/80 pt-3">
-                    {/* 4. Message frequency information */}
+                  <div className="text-[10px] text-stone-400 pl-6 leading-relaxed space-y-1">
                     <p>
-                      <strong className="text-stone-100 font-semibold">Message Frequency:</strong> You will receive up to 3 messages per day (message frequency varies based on regional sightings).
+                      Message frequency varies based on regional sightings (capped at {prefs.smsDailyCap} msgs/day). Standard message & data rates may apply.
                     </p>
-                    
-                    {/* 5. Standard disclaimers about message and data rates */}
                     <p>
-                      <strong className="text-stone-100 font-semibold">Standard Rates:</strong> Message and data rates may apply depending on your mobile phone service plan.
+                      Reply <strong className="text-amber-400 font-mono-code font-bold">STOP</strong> to opt out at any time. Reply <strong className="text-amber-400 font-mono-code font-bold">HELP</strong> for support or email <a href="mailto:celeron.sec@proton.me" className="text-amber-400 underline font-mono-code">celeron.sec@proton.me</a>.
                     </p>
-                    
-                    {/* 6. HELP and STOP instructions */}
-                    <p>
-                      <strong className="text-stone-100 font-semibold">Help & Stop:</strong> Reply <span className="text-amber-400 font-mono-code font-bold">HELP</span> for help or <span className="text-amber-400 font-mono-code font-bold">STOP</span> to cancel any time.
-                    </p>
-                    
-                    <p className="text-[10px] text-stone-400 leading-normal">
-                      By providing your phone number and checking the box above, you agree to receive text messages from Bourbon Alliance. Consent is not required to make a purchase or browse the website.
-                    </p>
-
-                    {/* 7. Links to Terms of Service and Privacy Policy */}
-                    <div className="pt-1.5 flex items-center gap-2 text-xs">
-                      <button
-                        type="button"
-                        onClick={onOpenTerms}
-                        className="text-amber-400 underline hover:text-amber-300 font-medium"
-                      >
-                        Terms of Service
-                      </button>
-                      <span className="text-stone-600">|</span>
+                    <div className="pt-1 flex items-center gap-3 text-[10px]">
                       <button
                         type="button"
                         onClick={onOpenPrivacy}
-                        className="text-amber-400 underline hover:text-amber-300 font-medium"
+                        className="text-stone-300 underline hover:text-amber-400"
                       >
                         Privacy Policy
+                      </button>
+                      <span className="text-stone-600">·</span>
+                      <button
+                        type="button"
+                        onClick={onOpenTerms}
+                        className="text-stone-300 underline hover:text-amber-400"
+                      >
+                        Terms & Conditions
                       </button>
                     </div>
                   </div>
                 </div>
 
-                {/* 8. Submit button with clear language (e.g. "Yes, sign me up!") */}
-                <div className="pt-1 space-y-2">
-                  <button
-                    type="button"
-                    onClick={handleSubscribeSms}
-                    className="w-full bg-stone-100 hover:bg-white text-stone-950 font-bold py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.99] text-xs sm:text-sm tracking-wide"
-                  >
-                    <span>Yes, sign me up!</span>
-                  </button>
-
+                <div className="pt-2">
                   <button
                     type="button"
                     onClick={handleSendTestSms}
-                    className="w-full bg-stone-900 hover:bg-stone-800 border border-stone-800 text-stone-400 hover:text-stone-200 py-1.5 px-3 rounded-lg flex items-center justify-center gap-2 transition-colors text-[11px]"
+                    className="w-full bg-stone-900 hover:bg-stone-800 border border-emerald-800/80 hover:border-emerald-600 text-emerald-300 font-medium py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-colors text-xs"
                   >
-                    <Send className="w-3 h-3 text-stone-500" />
-                    <span>Send Test SMS Notification</span>
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Send Test SMS Drop Alert</span>
                   </button>
                 </div>
               </div>
