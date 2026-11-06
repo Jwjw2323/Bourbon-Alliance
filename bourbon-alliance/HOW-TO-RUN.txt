@@ -1,12 +1,9 @@
 HOW TO RUN BOURBON ALLIANCE IN DOCKER
 
-1. Unzip this folder.
-2. Open a terminal inside the bourbon-alliance folder (the one containing docker-compose.yml).
+1. Open a terminal in this folder (the one containing docker-compose.yml).
+2. If an old container exists, run:   docker rm -f bourbon_alliance_web
 3. Run:   docker compose up -d --build
 4. Open http://localhost:3000
 
-Your Google Client ID is stored in the file named ".env" in this folder
-(variable VITE_GOOGLE_CLIENT_ID). It is no longer shown anywhere on the website.
-If you change it, rebuild:   docker compose up -d --build
-
+Google sign-in works out of the box. No .env file is required.
 To stop:   docker compose down

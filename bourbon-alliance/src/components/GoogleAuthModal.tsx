@@ -21,8 +21,11 @@ interface GoogleJwtPayload {
   family_name?: string;
 }
 
-// Client ID is read from the build environment only. It is never rendered in the UI.
-const GOOGLE_CLIENT_ID: string = ((import.meta as any).env?.VITE_GOOGLE_CLIENT_ID || '').trim();
+// Google OAuth Client ID (not displayed anywhere in the UI). A VITE_GOOGLE_CLIENT_ID build value overrides the default.
+const GOOGLE_CLIENT_ID: string = (
+  (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID ||
+  '19323179551-81fncrrnrv1gv690a98agpu8to55mtej.apps.googleusercontent.com'
+).trim();
 
 export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
   isOpen,
