@@ -21,6 +21,9 @@ export default function App() {
       const path = window.location.pathname;
       if (path === '/privacy') return 'privacy';
       if (path === '/terms') return 'terms';
+      if (path === '/alerts' || path === '/sms' || path === '/optin') return 'alerts';
+      if (path === '/stores') return 'stores';
+      if (path === '/ceilings') return 'ceilings';
     }
     return 'radar';
   });
@@ -33,6 +36,8 @@ export default function App() {
         window.history.pushState(null, '', '/privacy');
       } else if (tab === 'terms') {
         window.history.pushState(null, '', '/terms');
+      } else if (tab === 'alerts') {
+        window.history.pushState(null, '', '/alerts');
       } else {
         window.history.pushState(null, '', '/');
       }
@@ -47,6 +52,8 @@ export default function App() {
         setActiveTab('privacy');
       } else if (path === '/terms') {
         setActiveTab('terms');
+      } else if (path === '/alerts' || path === '/sms' || path === '/optin') {
+        setActiveTab('alerts');
       } else {
         setActiveTab('radar');
       }
@@ -92,28 +99,47 @@ export default function App() {
 
   const [bottles] = useState(POPULAR_BOTTLES);
 
-  // User Session (Dynamic Google OAuth Profile + SMS/Email endpoints)
+  // User Session (Clean Google OAuth Profile - no pre-filled personal test credentials)
   const [userSession, setUserSession] = useState<UserSession>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('bourbon_alliance_user');
+        if (raw && (raw.includes('whitman') || raw.includes('Whitman') || raw.includes('jonathan'))) {
+          localStorage.removeItem('bourbon_alliance_user');
+        }
+        const logs = localStorage.getItem('bourbon_notification_logs');
+        if (logs && (logs.includes('whitman') || logs.includes('Whitman'))) {
+          localStorage.removeItem('bourbon_notification_logs');
+        }
+      } catch (e) {
+        // ignore storage errors
+      }
+    }
+
     const saved = localStorage.getItem('bourbon_alliance_user');
     if (saved) {
       try {
         const parsed: UserSession = JSON.parse(saved);
-        return {
-          ...parsed,
-          watchPriorities: parsed.watchPriorities || {
-            'blantons-single-barrel': 'unicorn',
-            'weller-antique-107': 'unicorn',
-            'stagg-batch-barrel-proof': 'unicorn',
-            'eh-taylor-small-batch': 'want',
-            'eagle-rare-10': 'want'
-          },
-          alertPrefs: {
-            ...DEFAULT_ALERT_PREFS,
-            ...(parsed.alertPrefs || {}),
-            phoneNumber: parsed.phoneNumber || parsed.alertPrefs?.phoneNumber || '',
-            notificationEmail: parsed.notificationEmail || parsed.email || parsed.alertPrefs?.notificationEmail || ''
-          }
-        };
+        if (parsed.email?.includes('whitman') || parsed.name?.includes('Whitman') || parsed.notificationEmail?.includes('whitman')) {
+          localStorage.removeItem('bourbon_alliance_user');
+        } else if (parsed.isSignedIn) {
+          return {
+            ...parsed,
+            watchPriorities: parsed.watchPriorities || {
+              'blantons-single-barrel': 'unicorn',
+              'weller-antique-107': 'unicorn',
+              'stagg-batch-barrel-proof': 'unicorn',
+              'eh-taylor-small-batch': 'want',
+              'eagle-rare-10': 'want'
+            },
+            alertPrefs: {
+              ...DEFAULT_ALERT_PREFS,
+              ...(parsed.alertPrefs || {}),
+              phoneNumber: parsed.phoneNumber || parsed.alertPrefs?.phoneNumber || '',
+              notificationEmail: parsed.notificationEmail || parsed.email || parsed.alertPrefs?.notificationEmail || ''
+            }
+          };
+        }
       } catch (e) {
         // Fallback below
       }
@@ -153,7 +179,11 @@ export default function App() {
   // Save session to localStorage
   const handleUpdateSession = (newSession: UserSession) => {
     setUserSession(newSession);
-    localStorage.setItem('bourbon_alliance_user', JSON.stringify(newSession));
+    if (!newSession.isSignedIn || newSession.email?.includes('whitman') || newSession.name?.includes('Whitman')) {
+      localStorage.removeItem('bourbon_alliance_user');
+    } else {
+      localStorage.setItem('bourbon_alliance_user', JSON.stringify(newSession));
+    }
   };
 
   // Import stores from Google Places API
