@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, ShieldCheck, User, LogOut, CheckCircle, Lock, EyeOff } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, ShieldCheck, User, LogOut, CheckCircle, Lock, EyeOff, Key, Phone, Mail } from 'lucide-react';
 import { UserSession } from '../types';
 
 interface GoogleAuthModalProps {
@@ -7,6 +7,18 @@ interface GoogleAuthModalProps {
   onClose: () => void;
   userSession: UserSession;
   onUpdateSession: (newSession: UserSession) => void;
+  onOpenPrivacy?: () => void;
+  onOpenTerms?: () => void;
+}
+
+// Google Identity Services JWT payload type
+interface GoogleJwtPayload {
+  sub: string;
+  name: string;
+  email: string;
+  picture?: string;
+  given_name?: string;
+  family_name?: string;
 }
 
 export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
@@ -14,42 +26,148 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
   onClose,
   userSession,
   onUpdateSession,
+  onOpenPrivacy,
+  onOpenTerms,
 }) => {
-  const [customEmail, setCustomEmail] = useState('jonathanwhitman907@gmail.com');
-  const [customName, setCustomName] = useState('Jonathan Whitman');
-  const [isClerk, setIsClerk] = useState(false);
+  const [emailInput, setEmailInput] = useState(userSession.email || '');
+  const [nameInput, setNameInput] = useState(userSession.name || '');
+  const [phoneInput, setPhoneInput] = useState(userSession.phoneNumber || '');
+  const [googleClientId, setGoogleClientId] = useState(() => {
+    return localStorage.getItem('bourbon_google_client_id') || 
+           (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID || 
+           '19323179551-81fncrrnrv1gv690a98agpu8to55mtej.apps.googleusercontent.com';
+  });
+  const [isClerk, setIsClerk] = useState(userSession.role === 'verified_clerk');
   const [anonymousByDefault, setAnonymousByDefault] = useState(userSession.anonymousByDefault ?? true);
+  const [smsConsent, setSmsConsent] = useState(userSession.alertPrefs?.sms ?? false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  // Sync inputs when session changes
+  useEffect(() => {
+    if (userSession.isSignedIn) {
+      setEmailInput(userSession.email || '');
+      setNameInput(userSession.name || '');
+      setPhoneInput(userSession.phoneNumber || '');
+      setIsClerk(userSession.role === 'verified_clerk');
+      setAnonymousByDefault(userSession.anonymousByDefault);
+    }
+  }, [userSession]);
+
+  // When email changes in unsigned state, generate a smart readable name suggestion if name is blank or default
+  const handleEmailChange = (val: string) => {
+    setEmailInput(val);
+    if (!nameInput || nameInput === 'Whiskey Hunter') {
+      const prefix = val.split('@')[0] || '';
+      const formatted = prefix
+        .replace(/[._-]/g, ' ')
+        .replace(/\b\w/g, c => c.toUpperCase())
+        .trim();
+      if (formatted.length > 1) {
+        setNameInput(formatted);
+      }
+    }
+  };
+
+  // Google Identity Services (GIS) integration
+  useEffect(() => {
+    if (!isOpen || userSession.isSignedIn) return;
+
+    const clientId = googleClientId.trim();
+    if (clientId && typeof window !== 'undefined' && (window as any).google?.accounts?.id) {
+      try {
+        (window as any).google.accounts.id.initialize({
+          client_id: clientId,
+          callback: (response: { credential: string }) => {
+            try {
+              // Decode Google JWT (payload is the 2nd part)
+              const base64Url = response.credential.split('.')[1];
+              const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+              const jsonPayload = decodeURIComponent(
+                atob(base64)
+                  .split('')
+                  .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                  .join('')
+              );
+              const payload: GoogleJwtPayload = JSON.parse(jsonPayload);
+
+              onUpdateSession({
+                ...userSession,
+                isSignedIn: true,
+                email: payload.email,
+                name: payload.name || payload.given_name || 'Bourbon Scout',
+                avatarUrl: payload.picture,
+                isStoreWorker: isClerk,
+                anonymousByDefault,
+                role: isClerk ? 'verified_clerk' : 'whiskey_hunter',
+                reputationScore: userSession.reputationScore > 0 ? userSession.reputationScore : 100,
+                phoneNumber: phoneInput || userSession.phoneNumber,
+                notificationEmail: payload.email,
+                savedStoreIds: userSession.savedStoreIds || [],
+                savedBottleIds: userSession.savedBottleIds || [],
+                watchPriorities: userSession.watchPriorities || {},
+                alertPrefs: {
+                  ...userSession.alertPrefs,
+                  notificationEmail: payload.email,
+                  phoneNumber: phoneInput || userSession.alertPrefs?.phoneNumber
+                }
+              });
+              onClose();
+            } catch (err: any) {
+              setAuthError('Could not parse Google credential token.');
+            }
+          }
+        });
+
+        const targetDiv = document.getElementById('google-signin-btn-container');
+        if (targetDiv) {
+          targetDiv.innerHTML = '';
+          (window as any).google.accounts.id.renderButton(targetDiv, {
+            theme: 'filled_black',
+            size: 'large',
+            text: 'continue_with',
+            shape: 'rectangular',
+            width: 320
+          });
+        }
+      } catch (err) {
+        // Fallback gracefully
+      }
+    }
+  }, [isOpen, googleClientId, userSession.isSignedIn, isClerk, anonymousByDefault, phoneInput]);
 
   if (!isOpen) return null;
 
-  const handleSimulateGoogleLogin = () => {
+  const handleManualSignIn = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanEmail = emailInput.trim();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setAuthError('Please enter a valid email address.');
+      return;
+    }
+
+    const cleanName = nameInput.trim() || cleanEmail.split('@')[0];
+
     onUpdateSession({
       ...userSession,
       isSignedIn: true,
-      email: customEmail,
-      name: customName,
+      email: cleanEmail,
+      name: cleanName,
+      phoneNumber: phoneInput.trim() || undefined,
+      notificationEmail: cleanEmail,
       isStoreWorker: isClerk,
       anonymousByDefault,
       role: isClerk ? 'verified_clerk' : 'whiskey_hunter',
-      reputationScore: 120,
-      savedStoreIds: ['dc-schneiders', 'md-corridor-wine-spirits'],
-      savedBottleIds: ['blantons-single-barrel', 'weller-antique-107'],
-      watchPriorities: userSession.watchPriorities || {
-        'blantons-single-barrel': 'unicorn',
-        'weller-antique-107': 'unicorn'
-      },
-      alertPrefs: userSession.alertPrefs || {
-        regions: ['DC', 'MD', 'VA'],
-        sms: true,
-        email: true,
-        quietStart: 22,
-        quietEnd: 8,
-        cooldownHours: 4,
-        smsDailyCap: 3,
-        corroborationForSms: true,
-        freshWindowMin: 90
+      reputationScore: userSession.reputationScore > 0 ? userSession.reputationScore : 100,
+      savedStoreIds: userSession.savedStoreIds || [],
+      savedBottleIds: userSession.savedBottleIds || [],
+      watchPriorities: userSession.watchPriorities || {},
+      alertPrefs: {
+        ...userSession.alertPrefs,
+        notificationEmail: cleanEmail,
+        phoneNumber: phoneInput.trim() || userSession.alertPrefs?.phoneNumber
       }
     });
+    setAuthError(null);
     onClose();
   };
 
@@ -57,22 +175,31 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
     onUpdateSession({
       ...userSession,
       isSignedIn: false,
+      email: undefined,
+      name: undefined,
+      avatarUrl: undefined,
       anonymousByDefault: true,
       role: 'member',
-      reputationScore: 0,
-      savedStoreIds: [],
-      savedBottleIds: []
+      reputationScore: 0
     });
+    setEmailInput('');
+    setNameInput('');
+    setPhoneInput('');
+  };
+
+  const handleSaveClientId = (val: string) => {
+    setGoogleClientId(val);
+    localStorage.setItem('bourbon_google_client_id', val.trim());
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/80 backdrop-blur-md">
-      <div className="relative w-full max-w-md bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl p-6 sm:p-7 text-stone-100">
+      <div className="relative w-full max-w-md bg-stone-900 border border-stone-800 rounded-2xl shadow-2xl p-6 sm:p-7 text-stone-100 max-h-[92vh] overflow-y-auto">
         
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-stone-400 hover:text-stone-100 p-1 rounded-lg hover:bg-stone-800 transition-colors"
+          className="absolute top-4 right-4 text-stone-400 hover:text-stone-100 p-1.5 rounded-lg hover:bg-stone-800 transition-colors"
         >
           <X className="w-5 h-5" />
         </button>
@@ -81,17 +208,43 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
           /* Signed In Profile State */
           <div className="space-y-5">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-amber-600/20 border-2 border-amber-500 flex items-center justify-center text-amber-300 font-bold text-lg">
-                {userSession.name?.charAt(0) || 'U'}
-              </div>
-              <div>
-                <h3 className="font-serif-brand font-bold text-lg text-stone-100">
+              {userSession.avatarUrl ? (
+                <img
+                  src={userSession.avatarUrl}
+                  alt={userSession.name || 'User'}
+                  className="w-12 h-12 rounded-full border-2 border-amber-500 object-cover"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-amber-600/20 border-2 border-amber-500 flex items-center justify-center text-amber-300 font-bold text-lg">
+                  {userSession.name?.charAt(0) || 'U'}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <h3 className="font-serif-brand font-bold text-lg text-stone-100 truncate">
                   {userSession.name}
                 </h3>
-                <p className="text-xs text-stone-400 font-mono-code">{userSession.email}</p>
+                <p className="text-xs text-stone-400 font-mono-code truncate">{userSession.email}</p>
                 <div className="flex items-center gap-1.5 mt-1 text-[11px] text-emerald-400">
-                  <CheckCircle className="w-3.5 h-3.5" />
-                  <span>Google Account Verified · {userSession.role === 'verified_clerk' ? 'Store Associate' : 'Alliance Hunter'}</span>
+                  <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span>Authenticated Member · {userSession.role === 'verified_clerk' ? 'Store Associate' : 'Alliance Hunter'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Notification Contact Summary */}
+            <div className="p-3.5 bg-stone-950 border border-stone-800 rounded-xl space-y-2 text-xs">
+              <div className="font-semibold text-stone-300 flex items-center gap-2">
+                <Phone className="w-3.5 h-3.5 text-amber-400" />
+                <span>Notification Settings</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[11px] text-stone-400">
+                <div>
+                  <span className="block text-stone-500">Phone for SMS:</span>
+                  <span className="text-stone-200 font-mono-code">{userSession.phoneNumber || 'Not configured'}</span>
+                </div>
+                <div>
+                  <span className="block text-stone-500">Alert Email:</span>
+                  <span className="text-stone-200 font-mono-code truncate block">{userSession.email || 'None'}</span>
                 </div>
               </div>
             </div>
@@ -114,7 +267,7 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
                 />
               </div>
               <p className="text-[11px] text-stone-400">
-                When enabled, your public posts will never display your Google name or email. You will appear as an anonymous scout or clerk.
+                When enabled, your public posts will never display your name or email. You will appear as an anonymous scout or clerk.
               </p>
             </div>
 
@@ -144,15 +297,25 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
                 Bourbon Alliance Login
               </h2>
               <p className="text-xs text-stone-400 mt-1">
-                Authenticate with your Google Account to bookmark favorite independent stores, receive drop push alerts, and build hunter credibility.
+                Authenticate your account on <span className="text-amber-400 font-mono-code">bourbonalliance.net</span> to bookmark favorite stores, receive instant Unicorn SMS push alerts, and submit verified drop tips.
               </p>
             </div>
 
-            {/* Official Google Button */}
+            {authError && (
+              <div className="p-3 bg-red-950/80 border border-red-800 rounded-lg text-xs text-red-200">
+                {authError}
+              </div>
+            )}
+
+            {/* Official Google Identity Services Container */}
             <div className="space-y-3">
+              <div id="google-signin-btn-container" className="flex justify-center min-h-[44px]"></div>
+
+              {/* Direct Continue with Google Account Button */}
               <button
-                onClick={handleSimulateGoogleLogin}
-                className="w-full bg-white hover:bg-stone-100 text-stone-900 font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-3 transition-all shadow-md hover:scale-[1.01] active:scale-[0.99] text-sm"
+                type="button"
+                onClick={handleManualSignIn}
+                className="w-full bg-white hover:bg-stone-100 text-stone-900 font-semibold py-2.5 px-4 rounded-xl flex items-center justify-center gap-3 transition-all shadow-md hover:scale-[1.01] active:scale-[0.99] text-sm"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z" />
@@ -160,49 +323,161 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
                   <path fill="#FBBC05" d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12.3 0 15s.7 5.3 1.9 7.7l3.7-2.9z" />
                   <path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.4-6.4-5.2L1.9 16c1.8 3.7 5.6 7 10.1 7z" />
                 </svg>
-                <span>Continue with Google</span>
+                <span>Sign in with Google</span>
               </button>
 
               <div className="flex items-center gap-2 p-3 bg-stone-950 border border-stone-800 rounded-lg text-[11px] text-stone-400">
                 <ShieldCheck className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                 <span>
-                  <strong>Privacy First:</strong> You can always toggle full anonymity. We never expose your personal name on drop tips unless you choose to.
+                  <strong>Full Anonymity Shield:</strong> Drop tips never expose your real name or email unless you toggle public credit.
                 </span>
               </div>
             </div>
 
-            {/* Account Quick Settings */}
-            <div className="space-y-3 pt-2 border-t border-stone-800 text-xs">
+            {/* Custom Account & Notification Credentials */}
+            <form onSubmit={handleManualSignIn} className="space-y-3 pt-3 border-t border-stone-800 text-xs">
+              <div className="font-semibold text-stone-300 text-[11px] uppercase tracking-wider">
+                Account & SMS Alert Profile
+              </div>
+
               <div>
-                <label className="text-[11px] text-stone-400 block mb-1">Your Google Email</label>
-                <input
-                  type="email"
-                  value={customEmail}
-                  onChange={(e) => setCustomEmail(e.target.value)}
-                  className="w-full bg-stone-950 border border-stone-700 px-3 py-1.5 rounded text-xs text-stone-200 font-mono-code focus:outline-none focus:border-amber-500"
-                />
+                <label className="text-[11px] text-stone-400 block mb-1">Your Google / Notification Email</label>
+                <div className="relative">
+                  <Mail className="w-3.5 h-3.5 text-stone-500 absolute left-2.5 top-2.5" />
+                  <input
+                    type="email"
+                    required
+                    placeholder="you@gmail.com"
+                    value={emailInput}
+                    onChange={(e) => handleEmailChange(e.target.value)}
+                    className="w-full bg-stone-950 border border-stone-700 pl-8 pr-3 py-1.5 rounded text-xs text-stone-200 font-mono-code focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] text-stone-400 block mb-1">Display Name / Alias</label>
+                <div className="relative">
+                  <User className="w-3.5 h-3.5 text-stone-500 absolute left-2.5 top-2.5" />
+                  <input
+                    type="text"
+                    required
+                    placeholder="Your Name (e.g. Alex Hunter)"
+                    value={nameInput}
+                    onChange={(e) => setNameInput(e.target.value)}
+                    className="w-full bg-stone-950 border border-stone-700 pl-8 pr-3 py-1.5 rounded text-xs text-stone-200 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] text-stone-400 block mb-1">Mobile Phone for SMS Drop Alerts (Optional)</label>
+                <div className="relative">
+                  <Phone className="w-3.5 h-3.5 text-stone-500 absolute left-2.5 top-2.5" />
+                  <input
+                    type="tel"
+                    placeholder="+1 (202) 555-0199"
+                    value={phoneInput}
+                    onChange={(e) => setPhoneInput(e.target.value)}
+                    className="w-full bg-stone-950 border border-stone-700 pl-8 pr-3 py-1.5 rounded text-xs text-stone-200 font-mono-code focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                {phoneInput.trim().length > 0 && (
+                  <div className="mt-2 p-2.5 bg-stone-950 border border-stone-800 rounded-lg space-y-1 text-[11px]">
+                    <label className="flex items-start gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={smsConsent}
+                        onChange={(e) => setSmsConsent(e.target.checked)}
+                        className="mt-0.5 rounded border-stone-600 text-amber-600 focus:ring-amber-500 h-3.5 w-3.5 bg-stone-900 flex-shrink-0 cursor-pointer accent-amber-600"
+                      />
+                      <span className="text-stone-200 font-medium text-[11px] leading-tight">
+                        I agree to receive automated SMS alerts for watched drops from Bourbon Alliance. Msg frequency varies. Msg & data rates may apply. Reply STOP to cancel, HELP for help.
+                      </span>
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <label className="text-[11px] text-stone-300 cursor-pointer flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={isClerk}
+                    onChange={(e) => setIsClerk(e.target.checked)}
+                    className="rounded border-stone-700 text-amber-600 focus:ring-amber-500 h-4 w-4 bg-stone-900"
+                  />
+                  <span>I work at a liquor store / distributor</span>
+                </label>
               </div>
 
               <div className="flex items-center justify-between">
-                <label className="text-[11px] text-stone-300">I work at a liquor store / distributor</label>
-                <input
-                  type="checkbox"
-                  checked={isClerk}
-                  onChange={(e) => setIsClerk(e.target.checked)}
-                  className="rounded border-stone-700 text-amber-600 focus:ring-amber-500 h-4 w-4 bg-stone-900"
-                />
+                <label className="text-[11px] text-stone-300 cursor-pointer flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={anonymousByDefault}
+                    onChange={(e) => setAnonymousByDefault(e.target.checked)}
+                    className="rounded border-stone-700 text-amber-600 focus:ring-amber-500 h-4 w-4 bg-stone-900"
+                  />
+                  <span>Always post drop tips anonymously</span>
+                </label>
               </div>
 
-              <div className="flex items-center justify-between">
-                <label className="text-[11px] text-stone-300">Always post drop tips anonymously</label>
-                <input
-                  type="checkbox"
-                  checked={anonymousByDefault}
-                  onChange={(e) => setAnonymousByDefault(e.target.checked)}
-                  className="rounded border-stone-700 text-amber-600 focus:ring-amber-500 h-4 w-4 bg-stone-900"
-                />
+              {/* Advanced: Optional Google Client ID for Production OAuth */}
+              <div className="pt-2 border-t border-stone-800/80">
+                <details className="text-[11px] text-stone-500">
+                  <summary className="cursor-pointer hover:text-stone-300 flex items-center gap-1.5 py-1">
+                    <Key className="w-3 h-3 text-amber-500/80" />
+                    <span>Google OAuth Client ID (Production Config)</span>
+                  </summary>
+                  <div className="mt-2 space-y-1.5 pl-2">
+                    <p className="text-[10px] text-stone-400">
+                      To enable 1-tap Google Sign-In with your domain, add your Google Cloud OAuth Client ID (or set <code className="text-amber-400">VITE_GOOGLE_CLIENT_ID</code> in .env):
+                    </p>
+                    <input
+                      type="text"
+                      placeholder="e.g. 123456789-abc.apps.googleusercontent.com"
+                      value={googleClientId}
+                      onChange={(e) => handleSaveClientId(e.target.value)}
+                      className="w-full bg-stone-950 border border-stone-800 px-2 py-1 rounded text-[11px] text-stone-300 font-mono-code focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </details>
               </div>
-            </div>
+
+              <button
+                type="submit"
+                className="w-full bg-amber-600 hover:bg-amber-500 text-stone-950 font-bold py-2 rounded-lg text-xs transition-colors mt-2"
+              >
+                Save & Sign In
+              </button>
+
+              <div className="text-[10px] text-center text-stone-500 pt-1">
+                By authenticating, you agree to the{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenTerms?.();
+                  }}
+                  className="text-stone-400 hover:text-amber-400 underline"
+                >
+                  Terms & Conditions
+                </button>
+                {' '}and{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenPrivacy?.();
+                  }}
+                  className="text-stone-400 hover:text-amber-400 underline"
+                >
+                  Privacy Policy
+                </button>.
+              </div>
+            </form>
 
           </div>
         )}

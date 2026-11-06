@@ -21,7 +21,7 @@ export const PriceCeilingIndex: React.FC<PriceCeilingIndexProps> = ({ bottles })
   const calcDiff = calcPrice - calcCeiling;
   const calcMarkup = Math.round(((calcPrice - calcMsrp) / calcMsrp) * 100);
 
-  const categories = ['ALL', 'Bourbon', 'Wheated', 'Single Barrel', 'Rye', 'Cask Strength'];
+  const categories = ['ALL', 'Wheated', 'Single Barrel', 'Rye', 'Cask Strength'];
 
   const filteredBottles = bottles.filter(b => {
     if (categoryFilter !== 'ALL' && b.category !== categoryFilter) return false;
@@ -146,7 +146,7 @@ export const PriceCeilingIndex: React.FC<PriceCeilingIndexProps> = ({ bottles })
           />
         </div>
 
-        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+        <div className="flex items-center justify-start gap-1.5 overflow-x-auto no-scrollbar">
           {categories.map(cat => (
             <button
               key={cat}

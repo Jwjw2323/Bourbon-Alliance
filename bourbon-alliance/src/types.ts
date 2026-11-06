@@ -34,6 +34,7 @@ export interface Store {
   state: 'DC' | 'MD' | 'VA';
   zip: string;
   phone?: string;
+  website?: string;
   delivery?: string; // e.g. "Tue", "Thu"
   hours: string;
   rating: number;
@@ -45,6 +46,8 @@ export interface Store {
   activeSightings: number;
   lat: number;
   lng: number;
+  placeId?: string;
+  hasWebsite?: boolean;
 }
 
 export type TipsterRole = 
@@ -120,12 +123,18 @@ export interface AlertPrefs {
   regions: Jurisdiction[];
   sms: boolean;
   email: boolean;
+  phoneNumber?: string;
+  notificationEmail?: string;
+  smsDailyCap: number;
   quietStart: number; // e.g. 22 (10pm)
   quietEnd: number;   // e.g. 8 (8am)
   cooldownHours: number;
-  smsDailyCap: number;
   corroborationForSms: boolean;
   freshWindowMin: number;
+  twilioSid?: string;
+  twilioToken?: string;
+  twilioFromNumber?: string;
+  webhookUrl?: string;
 }
 
 export interface AlertDecision {
@@ -140,11 +149,23 @@ export interface PlannedAlert {
   decision: AlertDecision;
 }
 
+export interface NotificationLog {
+  id: string;
+  timestamp: string;
+  type: 'sms' | 'email';
+  recipient: string;
+  title: string;
+  message: string;
+  status: 'delivered' | 'simulated' | 'failed' | 'quiet_hours_blocked';
+}
+
 export interface UserSession {
   isSignedIn: boolean;
   email?: string;
   name?: string;
   avatarUrl?: string;
+  phoneNumber?: string;
+  notificationEmail?: string;
   isStoreWorker?: boolean;
   anonymousByDefault: boolean;
   role: 'member' | 'verified_clerk' | 'whiskey_hunter';

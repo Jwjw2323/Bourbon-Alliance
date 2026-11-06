@@ -209,22 +209,42 @@ export const DropFeed: React.FC<DropFeedProps> = ({
       {/* Drop Tips Stream Cards */}
       <div className="grid grid-cols-1 gap-4">
         {filteredTips.length === 0 ? (
-          <div className="bg-stone-900 border border-stone-800 rounded-xl p-10 text-center space-y-3">
-            <PackageX className="w-10 h-10 text-stone-600 mx-auto" />
-            <h3 className="font-serif-brand text-lg text-stone-200 font-bold">No Sightings Found</h3>
-            <p className="text-stone-400 text-xs max-w-sm mx-auto">
-              No recent tips match your active filters. Try resetting your search or report a new sighting.
-            </p>
-            <button
-              onClick={() => {
-                setJurisdictionFilter('ALL');
-                setCeilingFilter('ALL');
-                setSearchQuery('');
-              }}
-              className="text-amber-400 text-xs hover:underline font-medium"
-            >
-              Reset Filters
-            </button>
+          <div className="bg-stone-900 border border-stone-800 rounded-2xl p-8 sm:p-12 text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-amber-600/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
+              <Radio className="w-6 h-6 animate-pulse" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-serif-brand text-xl text-stone-100 font-bold">
+                {tips.length === 0 ? 'Radar Active · No Live Drops Reported' : 'No Sightings Match Your Filter'}
+              </h3>
+              <p className="text-stone-400 text-xs sm:text-sm max-w-md mx-auto">
+                {tips.length === 0 
+                  ? 'All placeholder mock sightings have been purged. The feed reflects only real community reports. Spotted an allocated bottle on a shelf or behind the counter?'
+                  : 'Try resetting your jurisdiction or price ceiling filter to inspect other regions.'}
+              </p>
+            </div>
+            
+            <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+              <button
+                onClick={onOpenTipModal}
+                className="bg-amber-600 hover:bg-amber-500 text-stone-950 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 shadow-md transition-all active:scale-95"
+              >
+                <Radio className="w-4 h-4" />
+                <span>Broadcast First Community Sighting</span>
+              </button>
+              {filteredTips.length !== tips.length && (
+                <button
+                  onClick={() => {
+                    setJurisdictionFilter('ALL');
+                    setCeilingFilter('ALL');
+                    setSearchQuery('');
+                  }}
+                  className="bg-stone-950 border border-stone-800 hover:bg-stone-800 text-stone-300 text-xs px-3.5 py-2 rounded-xl transition-colors font-medium"
+                >
+                  Reset Active Filters
+                </button>
+              )}
+            </div>
           </div>
         ) : (
           filteredTips.map((tip) => {

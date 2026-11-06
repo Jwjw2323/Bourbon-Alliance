@@ -1,11 +1,11 @@
 import React from 'react';
-import { PlusCircle, User, Compass, DollarSign, Bell, Sliders } from 'lucide-react';
+import { Compass, DollarSign, Bell, Sliders } from 'lucide-react';
 import { UserSession } from '../types';
 
 interface HeaderProps {
-  activeTab: 'radar' | 'alerts' | 'stores' | 'ceilings';
-  setActiveTab: (tab: 'radar' | 'alerts' | 'stores' | 'ceilings') => void;
-  openTipModal: () => void;
+  activeTab: 'radar' | 'alerts' | 'stores' | 'ceilings' | 'privacy' | 'terms';
+  setActiveTab: (tab: 'radar' | 'alerts' | 'stores' | 'ceilings' | 'privacy' | 'terms') => void;
+  openTipModal?: () => void;
   openAuthModal: () => void;
   userSession: UserSession;
   activeTipsCount: number;
@@ -33,15 +33,10 @@ export const Header: React.FC<HeaderProps> = ({
               <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-amber-600 to-amber-950 flex items-center justify-center border border-amber-500/40 shadow-inner group-hover:border-amber-400 transition-colors flex-shrink-0">
                 <span className="font-serif-brand font-bold text-lg sm:text-xl text-amber-100 tracking-wider">BA</span>
               </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-serif-brand text-lg sm:text-2xl font-bold tracking-tight text-stone-100 group-hover:text-amber-400 transition-colors leading-tight">
-                    Bourbon Alliance
-                  </span>
-                  <span className="hidden sm:inline-flex text-[11px] font-mono-code bg-amber-950/60 text-amber-400 border border-amber-800/60 px-2 py-0.5 rounded leading-normal">
-                    bourbonalliance.net
-                  </span>
-                </div>
+              <div className="min-w-0 flex flex-col justify-center">
+                <span className="font-serif-brand text-lg sm:text-2xl font-bold tracking-tight text-stone-100 group-hover:text-amber-400 transition-colors leading-tight">
+                  Bourbon Alliance
+                </span>
                 <div className="text-[11px] sm:text-xs text-stone-400 flex items-center gap-2 mt-0.5 whitespace-nowrap">
                   <span>DC, MD & VA Spirits Radar</span>
                   <span aria-hidden="true" className="text-stone-600">·</span>
@@ -105,41 +100,31 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           </nav>
 
-          {/* Right Action Cluster */}
-          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-            {/* Drop Tip Button */}
-            <button
-              onClick={openTipModal}
-              className="bg-amber-600 hover:bg-amber-500 text-stone-950 font-semibold px-3.5 sm:px-4 py-2 rounded-lg text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-amber-950/40 transition-all hover:scale-[1.02] active:scale-[0.98]"
-            >
-              <PlusCircle className="w-4 h-4" />
-              <span>Drop Tip</span>
-            </button>
-
-            {/* Google OAuth Login Button */}
+          {/* Right Action Cluster: Clean Google Sign-In */}
+          <div className="flex items-center flex-shrink-0">
             <button
               onClick={openAuthModal}
-              className="border border-stone-700 hover:border-amber-500/60 bg-stone-900/90 text-stone-200 px-3 py-2 rounded-lg text-xs sm:text-sm flex items-center gap-2 transition-all"
+              className="border border-stone-700/80 hover:border-amber-500/60 bg-stone-900/90 hover:bg-stone-800 text-stone-200 px-3.5 py-2 rounded-lg text-xs sm:text-sm font-medium flex items-center gap-2.5 transition-all shadow-sm"
+              title={userSession.isSignedIn ? userSession.name || 'Account Profile' : 'Sign in with Google'}
             >
               {userSession.isSignedIn ? (
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-amber-600/30 border border-amber-500 flex items-center justify-center text-amber-300 font-bold text-xs">
+                  <div className="w-6 h-6 rounded-full bg-amber-600/30 border border-amber-500 flex items-center justify-center text-amber-300 font-bold text-xs flex-shrink-0">
                     {userSession.name ? userSession.name.charAt(0) : 'U'}
                   </div>
-                  <span className="hidden sm:inline font-medium text-xs max-w-[100px] truncate text-stone-300">
+                  <span className="font-medium text-xs max-w-[120px] truncate text-stone-200">
                     {userSession.name || 'Member'}
                   </span>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <svg className="w-4 h-4" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24">
                     <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.4 9 5 12 5z" />
                     <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.7-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z" />
                     <path fill="#FBBC05" d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12.3 0 15s.7 5.3 1.9 7.7l3.7-2.9z" />
                     <path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.4-6.4-5.2L1.9 16c1.8 3.7 5.6 7 10.1 7z" />
                   </svg>
-                  <span className="hidden sm:inline">Sign in</span>
-                  <span className="sm:hidden"><User className="w-4 h-4" /></span>
+                  <span>Sign in</span>
                 </div>
               )}
             </button>

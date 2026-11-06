@@ -5,6 +5,8 @@ export const DEFAULT_ALERT_PREFS: AlertPrefs = {
   regions: ['DC', 'MD', 'VA'],
   sms: true,
   email: true,
+  phoneNumber: '',
+  notificationEmail: '',
   quietStart: 22, // 10 PM
   quietEnd: 8,    // 8 AM
   cooldownHours: 4,

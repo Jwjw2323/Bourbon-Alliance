@@ -6,22 +6,67 @@ import { PriceCeilingIndex } from './components/PriceCeilingIndex';
 import { AlertsManager } from './components/AlertsManager';
 import { DropTipModal } from './components/DropTipModal';
 import { GoogleAuthModal } from './components/GoogleAuthModal';
+import { PrivacyPolicy } from './components/PrivacyPolicy';
+import { TermsAndConditions } from './components/TermsAndConditions';
 import { INITIAL_DROP_TIPS } from './data/mockTips';
 import { DC_MD_VA_STORES } from './data/mockStores';
 import { POPULAR_BOTTLES } from './data/bottles';
 import { DropTip, Store, UserSession } from './types';
 import { DEFAULT_ALERT_PREFS } from './services/alertEngine';
-import { GitBranch } from 'lucide-react';
+import { ShieldCheck, FileText } from 'lucide-react';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'radar' | 'alerts' | 'stores' | 'ceilings'>('radar');
+  const [activeTab, setActiveTab] = useState<'radar' | 'alerts' | 'stores' | 'ceilings' | 'privacy' | 'terms'>(() => {
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname;
+      if (path === '/privacy') return 'privacy';
+      if (path === '/terms') return 'terms';
+    }
+    return 'radar';
+  });
+
+  // Handle URL history state synchronization
+  const handleNavigateTab = (tab: 'radar' | 'alerts' | 'stores' | 'ceilings' | 'privacy' | 'terms') => {
+    setActiveTab(tab);
+    if (typeof window !== 'undefined') {
+      if (tab === 'privacy') {
+        window.history.pushState(null, '', '/privacy');
+      } else if (tab === 'terms') {
+        window.history.pushState(null, '', '/terms');
+      } else {
+        window.history.pushState(null, '', '/');
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname;
+      if (path === '/privacy') {
+        setActiveTab('privacy');
+      } else if (path === '/terms') {
+        setActiveTab('terms');
+      } else {
+        setActiveTab('radar');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
   
-  // Persisted or default tips
+  // Persisted or clean tips (automatically purges any leftover fake 'tip-101' mock data)
   const [tips, setTips] = useState<DropTip[]>(() => {
     const saved = localStorage.getItem('bourbon_alliance_tips');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed: DropTip[] = JSON.parse(saved);
+        // If saved tips contain old fabricated mock IDs (tip-101 through tip-114), purge them!
+        if (Array.isArray(parsed) && parsed.some(t => t.id === 'tip-101' || t.id === 'tip-102')) {
+          localStorage.removeItem('bourbon_alliance_tips');
+          return INITIAL_DROP_TIPS;
+        }
+        return parsed;
       } catch (e) {
         return INITIAL_DROP_TIPS;
       }
@@ -29,33 +74,48 @@ export default function App() {
     return INITIAL_DROP_TIPS;
   });
 
-  const [stores] = useState<Store[]>(DC_MD_VA_STORES);
+  // Stores: Loaded from localStorage or verified baseline DC/MD/VA stores
+  const [stores, setStores] = useState<Store[]>(() => {
+    const saved = localStorage.getItem('bourbon_alliance_stores');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch (e) {
+        return DC_MD_VA_STORES;
+      }
+    }
+    return DC_MD_VA_STORES;
+  });
+
   const [bottles] = useState(POPULAR_BOTTLES);
 
-  // User Google Session with Watchlist & Alert Preferences
+  // User Session (Dynamic Google OAuth Profile + SMS/Email endpoints)
   const [userSession, setUserSession] = useState<UserSession>(() => {
     const saved = localStorage.getItem('bourbon_alliance_user');
     if (saved) {
       try {
-        return JSON.parse(saved);
-      } catch (e) {
+        const parsed: UserSession = JSON.parse(saved);
         return {
-          isSignedIn: false,
-          anonymousByDefault: true,
-          role: 'member',
-          reputationScore: 0,
-          savedStoreIds: [],
-          savedBottleIds: [],
-          watchPriorities: {
+          ...parsed,
+          watchPriorities: parsed.watchPriorities || {
             'blantons-single-barrel': 'unicorn',
             'weller-antique-107': 'unicorn',
             'stagg-batch-barrel-proof': 'unicorn',
             'eh-taylor-small-batch': 'want',
-            'eagle-rare-10': 'want',
-            'john-j-bowman-single-barrel': 'want'
+            'eagle-rare-10': 'want'
           },
-          alertPrefs: DEFAULT_ALERT_PREFS
+          alertPrefs: {
+            ...DEFAULT_ALERT_PREFS,
+            ...(parsed.alertPrefs || {}),
+            phoneNumber: parsed.phoneNumber || parsed.alertPrefs?.phoneNumber || '',
+            notificationEmail: parsed.notificationEmail || parsed.email || parsed.alertPrefs?.notificationEmail || ''
+          }
         };
+      } catch (e) {
+        // Fallback below
       }
     }
     return {
@@ -70,8 +130,7 @@ export default function App() {
         'weller-antique-107': 'unicorn',
         'stagg-batch-barrel-proof': 'unicorn',
         'eh-taylor-small-batch': 'want',
-        'eagle-rare-10': 'want',
-        'john-j-bowman-single-barrel': 'want'
+        'eagle-rare-10': 'want'
       },
       alertPrefs: DEFAULT_ALERT_PREFS
     };
@@ -86,10 +145,36 @@ export default function App() {
     localStorage.setItem('bourbon_alliance_tips', JSON.stringify(tips));
   }, [tips]);
 
+  // Save stores to localStorage
+  useEffect(() => {
+    localStorage.setItem('bourbon_alliance_stores', JSON.stringify(stores));
+  }, [stores]);
+
   // Save session to localStorage
   const handleUpdateSession = (newSession: UserSession) => {
     setUserSession(newSession);
     localStorage.setItem('bourbon_alliance_user', JSON.stringify(newSession));
+  };
+
+  // Import stores from Google Places API
+  const handleImportStores = (newStores: Store[]) => {
+    setStores(prev => {
+      // Avoid duplicate stores by name or address
+      const existingNames = new Set(prev.map(s => s.name.toLowerCase()));
+      const filtered = newStores.filter(ns => !existingNames.has(ns.name.toLowerCase()));
+      return [...filtered, ...prev];
+    });
+  };
+
+  // Delete store
+  const handleDeleteStore = (storeId: string) => {
+    setStores(prev => prev.filter(s => s.id !== storeId));
+  };
+
+  // Reset stores to verified baseline
+  const handleResetStores = () => {
+    setStores(DC_MD_VA_STORES);
+    localStorage.removeItem('bourbon_alliance_stores');
   };
 
   // Upvote / downvote tips
@@ -152,10 +237,10 @@ export default function App() {
   return (
     <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col selection:bg-amber-600 selection:text-white">
       
-      {/* Primary Header with Fixed Height & No Cutoff */}
+      {/* Primary Header with Fixed Height & Accurate Live Sightings Count */}
       <Header
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={handleNavigateTab}
         openTipModal={() => setIsTipModalOpen(true)}
         openAuthModal={() => setIsAuthModalOpen(true)}
         userSession={userSession}
@@ -181,18 +266,38 @@ export default function App() {
             bottles={bottles}
             userSession={userSession}
             onUpdateSession={handleUpdateSession}
+            onOpenPrivacy={() => handleNavigateTab('privacy')}
+            onOpenTerms={() => handleNavigateTab('terms')}
           />
         )}
 
         {activeTab === 'stores' && (
           <StoreDirectory
             stores={stores}
+            tips={tips}
             onSelectStoreForTip={handleSelectStoreForTip}
+            onImportStores={handleImportStores}
+            onDeleteStore={handleDeleteStore}
+            onResetStores={handleResetStores}
           />
         )}
 
         {activeTab === 'ceilings' && (
           <PriceCeilingIndex bottles={bottles} />
+        )}
+
+        {activeTab === 'privacy' && (
+          <PrivacyPolicy
+            onBack={() => handleNavigateTab('radar')}
+            onNavigateTerms={() => handleNavigateTab('terms')}
+          />
+        )}
+
+        {activeTab === 'terms' && (
+          <TermsAndConditions
+            onBack={() => handleNavigateTab('radar')}
+            onNavigatePrivacy={() => handleNavigateTab('privacy')}
+          />
         )}
 
       </main>
@@ -213,42 +318,46 @@ export default function App() {
 
           <div className="flex flex-wrap items-center justify-center gap-4 text-[11px]">
             <button
-              onClick={() => setActiveTab('radar')}
+              onClick={() => handleNavigateTab('radar')}
               className="text-stone-400 hover:text-amber-400 transition-colors"
             >
               Drop Radar
             </button>
             <span className="text-stone-700">·</span>
             <button
-              onClick={() => setActiveTab('alerts')}
+              onClick={() => handleNavigateTab('alerts')}
               className="text-stone-400 hover:text-amber-400 transition-colors"
             >
-              Alerts & Watchlist
+              SMS Alerts
             </button>
             <span className="text-stone-700">·</span>
             <button
-              onClick={() => setActiveTab('stores')}
+              onClick={() => handleNavigateTab('stores')}
               className="text-stone-400 hover:text-amber-400 transition-colors"
             >
               Store Directory
             </button>
             <span className="text-stone-700">·</span>
             <button
-              onClick={() => setActiveTab('ceilings')}
+              onClick={() => handleNavigateTab('ceilings')}
               className="text-stone-400 hover:text-amber-400 transition-colors"
             >
               Price Ceilings
             </button>
             <span className="text-stone-700">·</span>
-            <a
-              href="https://github.com/Jwjw2323/Bourbon-Alliance"
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-1 text-amber-400 hover:text-amber-300 transition-colors"
+            <button
+              onClick={() => handleNavigateTab('privacy')}
+              className="text-stone-400 hover:text-amber-400 transition-colors"
             >
-              <GitBranch className="w-3.5 h-3.5" />
-              <span>GitHub</span>
-            </a>
+              Privacy Policy
+            </button>
+            <span className="text-stone-700">·</span>
+            <button
+              onClick={() => handleNavigateTab('terms')}
+              className="text-stone-400 hover:text-amber-400 transition-colors"
+            >
+              Terms & Conditions
+            </button>
           </div>
 
         </div>
@@ -277,6 +386,8 @@ export default function App() {
         onClose={() => setIsAuthModalOpen(false)}
         userSession={userSession}
         onUpdateSession={handleUpdateSession}
+        onOpenPrivacy={() => handleNavigateTab('privacy')}
+        onOpenTerms={() => handleNavigateTab('terms')}
       />
 
     </div>
